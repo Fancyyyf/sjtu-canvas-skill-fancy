@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SJTU Canvas Skill Configuration",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "description": "Canvas API access token. Get it from Account > Settings > Approved Integrations > + New Access Token",
+      "format": "password"
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Base URL for the Canvas instance",
+      "default": "https://oc.sjtu.edu.cn",
+      "pattern": "^https?://"
+    },
+    "current_term": {
+      "type": "string",
+      "description": "Override automatic term detection (e.g., '2025-2026 Spring', '2026-2027 Fall')",
+      "pattern": "^\\d{4}-\\d{4} (Spring|Fall|Summer)$"
+    },
+    "timeout": {
+      "type": "integer",
+      "description": "Request timeout in seconds",
+      "default": 30,
+      "minimum": 5,
+      "maximum": 300
+    },
+    "cache_enabled": {
+      "type": "boolean",
+      "description": "Enable response caching for repeated queries",
+      "default": false
+    },
+    "cache_ttl": {
+      "type": "integer",
+      "description": "Cache time-to-live in seconds",
+      "default": 300,
+      "minimum": 60
+    }
+  },
+  "required": ["token"],
+  "additionalProperties": false
+}
