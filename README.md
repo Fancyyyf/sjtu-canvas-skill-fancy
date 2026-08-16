@@ -12,34 +12,48 @@ This skill provides a command-line interface (CLI) to interact with the SJTU Can
 - Manage files and folders
 - Download course materials
 
-## Installation
+## Quick Start
+
+### 1. Clone the repository
 
 ```bash
+git clone git@github.com:Fancyyyf/sjtu-canvas-skill-fancy.git
 cd sjtu-canvas-skill-fancy
+```
+
+### 2. Install dependencies
+
+```bash
 uv sync
 ```
 
-## Configuration
+### 3. Get your Canvas API Token
+
+1. Log in to [SJTU Canvas](https://oc.sjtu.edu.cn)
+2. Click **Account** (账户) in the left sidebar → **Settings** (设置)
+3. Scroll down to **Approved Integrations** (已批准的集成)
+4. Click **+ New Access Token** (+ 新访问令牌)
+5. Fill in:
+   - **Purpose** (用途): e.g., "Hermes Agent CLI" or "Personal Script"
+   - **Expires** (过期时间): Choose a date (recommend 1 year)
+6. Click **Generate Token** (生成令牌)
+7. **Important**: Copy the token immediately! You won't be able to see it again.
+
+### 4. Configure the token
 
 Create a `.env` file in the project root:
 
-```env
-TOKEN=your_canvas_api_token
-BASE_URL=https://oc.sjtu.edu.cn  # Optional, defaults to this value
+```bash
+echo "TOKEN=your_canvas_api_token_here" > .env
 ```
 
-### Getting an API Token
+Or set it as an environment variable:
 
-1. Log in to your SJTU Canvas account
-2. Go to **Account** > **Settings**
-3. Scroll down to **Approved Integrations**
-4. Click **+ New Access Token**
-5. Give it a purpose and expiration date
-6. Click **Generate Token** and copy it immediately
+```bash
+export TOKEN=your_canvas_api_token_here
+```
 
-## Usage
-
-All commands are available via the `main` entry point:
+### 5. Run commands
 
 ```bash
 # List current semester assignments (recommended)
@@ -67,10 +81,54 @@ uv run main list-folders <course_id>
 uv run main download-file <file_url> --path ./downloads
 ```
 
+## Detailed Usage
+
+### Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `list-current-assignments` | **推荐** - 列出当前学期所有课程的未过期作业，显示提交状态 |
+| `list-courses` | 列出当前用户的所有活跃课程 |
+| `list-assignments <course_id>` | 列出指定课程的所有作业 |
+| `submit <course_id> <assignment_id> <files...>` | 提交作业文件 |
+| `get-me` | 获取当前用户信息 |
+| `list-files <course_id>` | 列出课程文件 |
+| `list-folders <course_id>` | 列出课程文件夹 |
+| `download-file <url>` | 下载文件 |
+
 ### Options
 
-- `--json`: Output raw JSON instead of formatted tables
-- `--term <term>`: Specify term (e.g., "2025-2026 Spring"), defaults to auto-detect current term
+- `--json`: 输出原始 JSON 格式（适合程序处理）
+- `--term <term>`: 指定学期，如 `"2025-2026 Spring"`，默认自动识别当前学期
+- `--base-url`: Canvas 实例地址，默认 `https://oc.sjtu.edu.cn`
+
+### Examples
+
+```bash
+# 查看当前学期作业（JSON 格式）
+uv run main --json list-current-assignments
+
+# 指定学期查看作业
+uv run main list-current-assignments --term "2025-2026 Spring"
+
+# 查看特定课程的所有作业
+uv run main --json list-courses | jq '.[] | select(.name | contains("计算机"))'
+uv run main list-assignments 12345
+
+# 提交作业
+uv run main submit 12345 67890 ./homework.py ./report.pdf --comment "Final submission"
+```
+
+## Configuration
+
+The skill uses a `.env` file or environment variables:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `TOKEN` | Yes | - | Canvas API token |
+| `BASE_URL` | No | `https://oc.sjtu.edu.cn` | Canvas instance URL |
+
+Configuration schema is defined in `config.json`.
 
 ## Project Structure
 
@@ -83,7 +141,7 @@ sjtu-canvas-skill-fancy/
 ├── references/          # Documentation references
 │   └── troubleshooting.md
 ├── SKILL.md             # Skill definition for Hermes Agent
-├── config.json          # Configuration schema
+├── config.json          # Configuration JSON Schema
 ├── pyproject.toml       # Python project configuration
 ├── .gitignore
 └── README.md
@@ -103,14 +161,28 @@ sjtu-canvas-skill-fancy/
 # Install dependencies
 uv sync
 
-# Run tests (if any)
-uv run pytest
+# Run with development dependencies
+uv sync --dev
 
 # Format code
 uv run ruff format
 uv run ruff check --fix
+
+# Type check
+uv run mypy scripts/
 ```
+
+## Troubleshooting
+
+See [references/troubleshooting.md](references/troubleshooting.md) for:
+- SSL connectivity issues in WSL
+- Token management
+- Current term detection details
 
 ## License
 
 MIT License - Same as the original Hermes Agent project.
+
+## Credits
+
+Based on the [SJTU Canvas Skill](https://github.com/nousresearch/hermes-agent/tree/main/skills/sjtu-canvas-skill) from the Hermes Agent project by Nous Research.

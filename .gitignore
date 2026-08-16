@@ -8,7 +8,34 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+env/
 
 # Local secrets
 .env
 .env.*
+*.key
+*.pem
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Distribution
+dist/
+*.whl
