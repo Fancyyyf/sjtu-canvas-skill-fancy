@@ -14,6 +14,16 @@
       "default": "https://oc.sjtu.edu.cn",
       "pattern": "^https?://"
     },
+    "save_dir": {
+      "type": "string",
+      "description": "Directory to save downloaded course files",
+      "default": "~/Downloads/Canvas课件"
+    },
+    "calendar_name": {
+      "type": "string",
+      "description": "Apple Calendar name for DDL sync (macOS only)",
+      "default": "Canvas作业"
+    },
     "current_term": {
       "type": "string",
       "description": "Override automatic term detection (e.g., '2025-2026 Spring', '2026-2027 Fall')",

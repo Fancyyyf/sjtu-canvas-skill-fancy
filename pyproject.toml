@@ -1,7 +1,7 @@
 [project]
-name = "scripts"
-version = "0.1.0"
-description = "A CLI tool to interact with SJTU Canvas, converted from the Rust implementation."
+name = "sjtu-canvas-skill"
+version = "0.2.0"
+description = "A CLI tool to interact with SJTU Canvas LMS, with file extraction, calendar sync, and AI-powered study features."
 dependencies = [
     "asyncclick>=8.0",
     "aiohttp[speedups]>=3.9.0",
@@ -9,8 +9,17 @@ dependencies = [
     "python-dotenv>=1.0",
     "beautifulsoup4>=4.0",
     "lxml>=5.0",
+    "pydantic>=2.0",
+    "yarl>=1.9",
 ]
 requires-python = ">=3.12"
+
+[project.optional-dependencies]
+extract = [
+    "python-pptx>=1.0",
+    "pdfplumber>=0.10",
+    "python-docx>=1.0",
+]
 
 [project.scripts]
 main = "scripts.main:main"

@@ -144,6 +144,107 @@ class CanvasClient:
         """Fetch all folders for a given course ID."""
         return await self.list_items(f"/api/v1/courses/{course_id}/folders")
 
+    async def get_course_grades(self, course_id: int) -> List[Dict[str, Any]]:
+        """Fetch grades for all assignments in a course."""
+        assignments = await self.get_assignments(course_id)
+        results = []
+        for a in assignments:
+            sub = a.get("submission", {})
+            results.append({
+                "name": a["name"],
+                "points_possible": a.get("points_possible"),
+                "score": sub.get("score") if sub else None,
+                "grade": sub.get("grade") if sub else None,
+                "workflow_state": sub.get("workflow_state", "") if sub else "",
+                "due_at": a.get("due_at"),
+            })
+        return results
+
+    async def list_discussions(self, course_id: int) -> List[Dict[str, Any]]:
+        """Fetch all discussion topics for a course."""
+        return await self.list_items(
+            f"/api/v1/courses/{course_id}/discussion_topics", params={"per_page": 50}
+        )
+
+    async def get_full_discussion(self, course_id: int, topic_id: int) -> Dict[str, Any]:
+        """Fetch full discussion topic with entries."""
+        path = f"/api/v1/courses/{course_id}/discussion_topics/{topic_id}/view"
+        res = await self._get(path)
+        return await res.json()
+
+    async def download_course_files(
+        self, course_id: int, course_name: str, save_dir: str, extensions: list[str] | None = None
+    ) -> list[str]:
+        """批量下载课程文件，可按扩展名过滤"""
+        files = await self.get_files(course_id)
+        downloaded = []
+        for f in files:
+            name = f.get("display_name", "")
+            if extensions:
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in extensions:
+                    continue
+            save_path = os.path.join(save_dir, course_name, name)
+            if os.path.exists(save_path):
+                downloaded.append(save_path)
+                continue
+            try:
+                await self.download_file(f["url"], save_path)
+                downloaded.append(save_path)
+                if not self.json_output:
+                    print(f"  ✅ {name}")
+            except Exception as e:
+                if not self.json_output:
+                    print(f"  ❌ {name}: {e}")
+        return downloaded
+
+    async def get_all_upcoming_ddls(self) -> List[Dict[str, Any]]:
+        """获取所有课程的未来DDL"""
+        from datetime import datetime, timezone, timedelta
+        TZ_SHANGHAI = timezone(timedelta(hours=8))
+        now = datetime.now(TZ_SHANGHAI)
+        courses = await self.get_courses()
+        ddls = []
+        for c in courses:
+            try:
+                assignments = await self.get_assignments(c["id"])
+            except Exception:
+                continue
+            for a in assignments:
+                due = a.get("due_at")
+                if not due:
+                    continue
+                due_dt = datetime.fromisoformat(due.replace("Z", "+00:00")).astimezone(TZ_SHANGHAI)
+                if due_dt > now:
+                    sub = a.get("submission", {})
+                    workflow = sub.get("workflow_state", "") if sub else ""
+                    ddls.append({
+                        "course": c.get("name", ""),
+                        "course_id": c["id"],
+                        "assignment": a["name"],
+                        "assignment_id": a["id"],
+                        "due_at": due,
+                        "due_local": due_dt.strftime("%Y-%m-%d %H:%M"),
+                        "submitted": workflow in ["submitted", "graded"],
+                        "points": a.get("points_possible"),
+                    })
+        ddls.sort(key=lambda x: x["due_at"])
+        return ddls
+
+    async def list_calendar_events(
+        self, course_ids: List[int], start_date: str, end_date: str
+    ) -> List[Dict[str, Any]]:
+        """获取指定课程的日历事件"""
+        context_codes = [f"course_{cid}" for cid in course_ids]
+        params = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "per_page": 100,
+        }
+        for i, cc in enumerate(context_codes):
+            params[f"context_codes[{i}]"] = cc
+        return await self.list_items("/api/v1/calendar_events", params)
+
     async def get_assignment_submission(
         self, course_id: int, assignment_id: int
     ) -> Dict[str, Any]:
