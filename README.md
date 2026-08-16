@@ -1,266 +1,363 @@
-# SJTU Canvas Skill - Fancy's Fork
+# SJTU Canvas Skill
 
-A personal fork of the [SJTU Canvas Skill](https://github.com/nousresearch/hermes-agent/tree/main/skills/sjtu-canvas-skill) for interacting with the Shanghai Jiao Tong University Canvas LMS, enhanced with AI-powered study features inspired by [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas).
+一个面向上海交通大学 Canvas（`oc.sjtu.edu.cn`）的命令行课程助手，帮你管理课程、作业、文件、成绩，并内置课件提取、日历同步等 AI 学习辅助能力。
 
-## Overview
+本工具基于 [Hermes Agent 的 sjtu-canvas-skill](https://github.com/nousresearch/hermes-agent) 开发，并借鉴了 [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas) 的 AI 学习特性进行增强。
 
-This skill provides a command-line interface (CLI) to interact with the SJTU Canvas Learning Management System. It allows you to:
+> 💡 除上海交大外，也可通过修改 `base_url` 适配任何 Canvas LMS 实例。
 
-- List courses and assignments
-- Query current semester assignments with completion status
-- Submit assignments
-- Manage files and folders
-- Download and batch-download course materials
-- Extract course materials (PPT/PDF/DOCX → Markdown)
-- Track grades and calculate averages
-- Browse course discussion forums
-- Sync DDLs to Apple Calendar (macOS)
-- Track all upcoming DDLs across courses
+---
 
-## Quick Start
+## 目录
 
-### 1. Clone the repository
+- [功能特性](#功能特性)
+- [目录结构](#目录结构)
+- [环境要求](#环境要求)
+- [安装](#安装)
+- [获取 Canvas API Token](#获取-canvas-api-token)
+- [配置](#配置)
+- [快速开始](#快速开始)
+- [命令详解](#命令详解)
+- [AI 学习工作流](#ai-学习工作流)
+- [常见问题](#常见问题)
+- [致谢与许可](#致谢与许可)
+
+---
+
+## 功能特性
+
+| 分类 | 功能 | 说明 |
+|---|---|---|
+| 📚 课程 | 查看课程列表 | 列出当前用户所有活跃课程，含课程号、学期、教师 |
+| 📝 作业 | 当前学期作业查询 | 一键列出本学期所有未过期作业，并标注提交状态（推荐） |
+| 📝 作业 | 全量 DDL 追踪 | 跨学期查看所有课程的未来截止时间 |
+| 📝 作业 | 提交作业 | 命令行直接上传文件并提交，支持附带评语 |
+| 📊 成绩 | 成绩查询 | 查看各科已出成绩，自动计算加权总分 |
+| 📂 文件 | 文件 / 文件夹管理 | 列出课程文件与目录结构 |
+| 📂 文件 | 批量下载课件 | 按扩展名过滤，一键下载某课程的 PDF / PPT 等 |
+| 🧠 课件学习 | 内容提取 | PPT / PDF / DOCX / TXT / MD → Markdown，配合 LLM 生成笔记 |
+| 🧠 课件学习 | 期末复习包 | 批量提取目录下所有课件为 Markdown |
+| 💬 讨论区 | 浏览课程讨论 | 查看讨论话题列表与完整内容 |
+| ⏰ 日历 | DDL 日历同步 | 将 DDL 同步到 Apple 日历，iCloud 推送到 iPhone（macOS） |
+| 🤖 智能交互 | JSON 输出 | `--json` 输出机器可读数据，便于 Agent 集成 |
+
+---
+
+## 目录结构
+
+```
+sjtu-canvas-skill-fancy/
+├── scripts/                 # Python 源码
+│   ├── main.py              # CLI 入口，定义全部命令
+│   ├── client.py            # Canvas API 客户端
+│   ├── file_extractor.py    # 课件内容提取器（PPT/PDF/DOCX → Markdown）
+│   ├── calendar_sync.py     # DDL → Apple 日历同步（macOS）
+│   └── __init__.py
+├── references/              # 参考文档
+│   └── troubleshooting.md   # 故障排查（WSL 网络、Token、学期检测）
+├── SKILL.md                 # Agent 技能定义
+├── config.json              # 配置项 JSON Schema 定义
+├── config.example.json      # 配置示例
+├── pyproject.toml           # 项目依赖与构建配置
+├── uv.lock                  # 依赖锁文件（保证可复现构建）
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 环境要求
+
+- **Python ≥ 3.12**
+- **[uv](https://docs.astral.sh/uv/)**（推荐的包管理器与运行环境）
+- 网络可访问 `oc.sjtu.edu.cn`
+
+> 无需 uv 也可运行：`pip install -e .` 后直接使用 `main` 命令，或 `python -m scripts.main`。
+
+---
+
+## 安装
+
+### 1. 克隆仓库
 
 ```bash
 git clone git@github.com:Fancyyyf/sjtu-canvas-skill-fancy.git
 cd sjtu-canvas-skill-fancy
 ```
 
-### 2. Install dependencies
+### 2. 安装依赖
+
+使用 uv（推荐）：
 
 ```bash
 uv sync
 ```
 
-Optional dependencies for file extraction:
+若需课件提取功能（PPT / PDF / DOCX），额外安装可选依赖：
 
 ```bash
+uv sync --extra extract
+# 或
 uv pip install python-pptx pdfplumber python-docx
 ```
 
-### 3. Get your Canvas API Token
+### 3. 配置 Token
 
-1. Log in to [SJTU Canvas](https://oc.sjtu.edu.cn)
-2. Click **Account** (账户) in the left sidebar → **Settings** (设置)
-3. Scroll down to **Approved Integrations** (已批准的集成)
-4. Click **+ New Access Token** (+ 新访问令牌)
-5. Fill in:
-   - **Purpose** (用途): e.g., "Hermes Agent CLI" or "Personal Script"
-   - **Expires** (过期时间): Choose a date (recommend 1 year)
-6. Click **Generate Token** (生成令牌)
-7. **Important**: Copy the token immediately! You won't be able to see it again.
+见下方 [获取 Canvas API Token](#获取-canvas-api-token) 与 [配置](#配置)。
 
-### 4. Configure the token
+---
 
-Create a `.env` file in the project root:
+## 获取 Canvas API Token
+
+1. 登录 [SJTU Canvas](https://oc.sjtu.edu.cn)
+2. 点击左侧 **账户（Account）** → **设置（Settings）**
+3. 向下滚动到 **已批准的集成（Approved Integrations）**
+4. 点击 **+ 新建访问令牌（+ New Access Token）**
+5. 填写：
+   - **用途（Purpose）**：例如 `sjtu-canvas-skill`
+   - **过期时间（Expires）**：建议选择一年
+6. 点击 **生成令牌（Generate Token）**
+7. **⚠️ 立即复制**：令牌只显示一次，关闭后无法再次查看
+
+---
+
+## 配置
+
+本工具支持三种配置方式，优先级从高到低依次为：
+
+1. **命令行参数**：`--token`、`--base-url`
+2. **环境变量**：`TOKEN`、`BASE_URL`、`SAVE_DIR`、`CALENDAR_NAME`
+3. **`.env` 文件**（项目根目录）
+
+### 方式一：`.env` 文件（推荐）
+
+在项目根目录创建 `.env`：
 
 ```bash
-echo "TOKEN=your_canvas_api_token_here" > .env
+echo "TOKEN=你的Canvas令牌" > .env
 ```
 
-Or set it as an environment variable:
+可选配置：
 
 ```bash
-export TOKEN=your_canvas_api_token_here
+# .env
+TOKEN=你的Canvas令牌
+BASE_URL=https://oc.sjtu.edu.cn
+SAVE_DIR=~/Downloads/Canvas课件   # 课件默认下载目录
+CALENDAR_NAME=Canvas作业           # Apple 日历分类名
 ```
 
-### 5. Run commands
+### 方式二：环境变量
 
 ```bash
-# List current semester assignments (recommended)
+export TOKEN=你的Canvas令牌
+export BASE_URL=https://oc.sjtu.edu.cn
+```
+
+### 方式三：命令行参数
+
+```bash
+uv run main --token 你的Canvas令牌 list-courses
+```
+
+### 首次运行交互式输入
+
+若未配置 Token 且处于交互式终端，程序会提示你输入，并可选择自动写入 `.env`：
+
+```bash
+uv run main list-courses
+# TOKEN not found ... 
+# Please enter your Canvas API token: ****
+# Save TOKEN to project .env for future runs? [Y/n]
+```
+
+> 更多配置项说明见 `config.json`（JSON Schema）与 `config.example.json`（示例）。其中 `current_term` 通常无需手动设置，工具会根据系统日期自动识别当前学期。
+
+---
+
+## 快速开始
+
+```bash
+# 查看本学期所有未过期作业（含提交状态）—— 最常用
 uv run main list-current-assignments
 
-# List all courses
+# 查看所有课程
 uv run main list-courses
 
-# List assignments for a specific course
-uv run main list-assignments <course_id>
-
-# Submit an assignment
-uv run main submit <course_id> <assignment_id> <file1> <file2> --comment "My submission"
-
-# Get current user profile
-uv run main get-me
-
-# List files for a course
-uv run main list-files <course_id>
-
-# List folders for a course
-uv run main list-folders <course_id>
-
-# Download a file
-uv run main download-file <file_url> --path ./downloads
-```
-
-## Detailed Usage
-
-### Commands Reference
-
-| Command | Description |
-|---------|-------------|
-| `list-current-assignments` | **推荐** - 列出当前学期所有课程的未过期作业，显示提交状态 |
-| `list-courses` | 列出当前用户的所有活跃课程 |
-| `list-assignments <course_id>` | 列出指定课程的所有作业 |
-| `list-ddls` | 列出所有课程的未来 DDL，显示提交状态 |
-| `grades <course_id>` | 查看课程成绩，计算加权总分 |
-| `submit <course_id> <assignment_id> <files...>` | 提交作业文件 |
-| `get-me` | 获取当前用户信息 |
-| `list-files <course_id>` | 列出课程文件 |
-| `list-folders <course_id>` | 列出课程文件夹 |
-| `batch-download <course_id>` | 批量下载课程文件，可按扩展名过滤 |
-| `download-file <url>` | 下载单个文件 |
-| `list-discussions <course_id>` | 列出课程讨论区话题 |
-| `get-discussion <course_id> <topic_id>` | 获取讨论区话题详情 |
-| `sync-calendar` | 同步 DDL 到 Apple Calendar（macOS） |
-| `extract-file <file>` | 提取 PPT/PDF/DOCX 内容为 Markdown（无需 token） |
-| `batch-extract <dir>` | 批量提取课件为 Markdown（无需 token） |
-
-### Options
-
-- `--json`: 输出原始 JSON 格式（适合程序处理）
-- `--term <term>`: 指定学期，如 `"2025-2026 Spring"`，默认自动识别当前学期
-- `--base-url`: Canvas 实例地址，默认 `https://oc.sjtu.edu.cn`
-- `--ext <ext>`: 文件扩展名过滤（`batch-download` / `batch-extract`，可多次指定）
-- `--days <days>`: 同步天数（`sync-calendar`，默认 30）
-- `--output, -o <path>`: 输出路径（`extract-file` / `batch-extract`）
-
-### Examples
-
-```bash
-# 查看当前学期作业（JSON 格式）
-uv run main --json list-current-assignments
-
-# 指定学期查看作业
-uv run main list-current-assignments --term "2025-2026 Spring"
-
-# 查看所有未来 DDL
+# 查看所有课程的未来 DDL
 uv run main list-ddls
 
-# 查看特定课程的所有作业
-uv run main --json list-courses | jq '.[] | select(.name | contains("计算机"))'
-uv run main list-assignments 12345
-
-# 提交作业
-uv run main submit 12345 67890 ./homework.py ./report.pdf --comment "Final submission"
-
-# 批量下载 PDF 和 PPTX 课件
-uv run main batch-download 12345 --ext .pdf --ext .pptx --path ~/Downloads/Courses
-
-# 查看课程成绩
+# 查看某门课的成绩
 uv run main grades 12345
 
-# 提取课件为 Markdown
-uv run main extract-file lecture.pptx -o lecture.md
+# 列出某门课的文件
+uv run main list-files 12345
 
-# 批量提取目录下所有课件
-uv run main batch-extract ~/Downloads/Canvas课件/传热学 -o ~/Downloads/Canvas课件/传热学_md
-
-# 同步 DDL 到 Apple 日历（macOS）
-uv run main sync-calendar --days 30
+# 提交作业
+uv run main submit 12345 67890 ./homework.py --comment "第一次提交"
 ```
 
-## AI-Powered Study Workflows
+---
 
-This skill supports advanced AI-assisted study workflows:
+## 命令详解
+
+所有命令统一以 `uv run main <命令>` 执行。全局选项：
+
+| 选项 | 说明 |
+|---|---|
+| `--token TEXT` | Canvas API 令牌（也可用 `TOKEN` 环境变量） |
+| `--base-url TEXT` | Canvas 地址，默认 `https://oc.sjtu.edu.cn` |
+| `--json` | 输出原始 JSON（适合程序 / Agent 处理） |
+
+> 注意：`--json` 等全局选项需放在子命令之前，例如 `uv run main --json list-courses`。
+
+### 📚 课程
+
+```bash
+# 列出当前用户所有活跃课程
+uv run main list-courses
+```
+
+### 📝 作业
+
+```bash
+# 列出本学期所有未过期作业，并标注提交状态（推荐）
+uv run main list-current-assignments
+uv run main list-current-assignments --term "2025-2026 Spring"   # 指定学期
+
+# 列出所有课程的未来 DDL
+uv run main list-ddls
+
+# 列出指定课程的所有作业
+uv run main list-assignments 12345
+
+# 提交作业（可一次提交多个文件）
+uv run main submit 12345 67890 ./main.py ./report.pdf --comment "最终版"
+```
+
+### 📊 成绩
+
+```bash
+# 查看某门课的所有作业成绩与加权总分
+uv run main grades 12345
+```
+
+### 📂 文件
+
+```bash
+# 列出课程文件 / 文件夹
+uv run main list-files 12345
+uv run main list-folders 12345
+
+# 批量下载课件（可按扩展名过滤）
+uv run main batch-download 12345 --ext .pdf --ext .pptx --path ~/Downloads/课程
+
+# 下载单个文件（URL 来自 list-files 输出）
+uv run main download-file "https://..." --path ./downloads
+```
+
+### 🧠 课件提取（无需 Token）
+
+```bash
+# 提取单个文件为 Markdown
+uv run main extract-file lecture.pptx
+uv run main extract-file lecture.pdf -o lecture.md     # 保存到文件
+
+# 批量提取目录下所有课件
+uv run main batch-extract ~/Downloads/Canvas课件/传热学 -o ~/Downloads/传热学_md
+```
+
+### 💬 讨论区
+
+```bash
+# 列出课程讨论话题
+uv run main list-discussions 12345
+
+# 查看某个话题的完整内容
+uv run main get-discussion 12345 9999
+```
+
+### ⏰ 日历同步（macOS）
+
+```bash
+# 将未来 30 天的 DDL 同步到 Apple 日历
+uv run main sync-calendar
+uv run main sync-calendar --days 60
+```
+
+### 👤 其他
+
+```bash
+# 查看当前用户信息
+uv run main get-me
+```
+
+---
+
+## AI 学习工作流
+
+本工具可与 LLM 配合，实现"不止查数据"的学习辅助。
 
 ### 1. 课件总结
 
-1. `batch-download <course_id> --ext .pdf --ext .pptx` 下载课件
-2. `batch-extract <dir> -o <output_dir>` 提取为 Markdown
-3. 将 Markdown 发送给 LLM 生成学习笔记
+```bash
+# ① 下载课件
+uv run main batch-download 12345 --ext .pdf --ext .pptx
+
+# ② 提取为 Markdown
+uv run main batch-extract ~/Downloads/Canvas课件/课程名 -o ~/Downloads/课程名_md
+
+# ③ 将 Markdown 交给 LLM 生成学习笔记
+```
 
 ### 2. 作业辅导
 
 1. `list-assignments <course_id>` 获取作业要求
 2. `batch-download` + `batch-extract` 提取对应课件
-3. 结合作业要求和课件，给出解题思路
+3. 结合作业要求与课件内容，让 LLM 定位知识点、给出解题思路
 
 ### 3. DDL 管理
 
-1. `list-ddls` 查看所有未来 DDL
-2. `sync-calendar` 同步到 Apple 日历
-3. 设置 cron 定时巡检
+1. `list-ddls` 查看所有未来截止时间
+2. `sync-calendar` 同步到 Apple 日历（macOS，iCloud 推送至 iPhone）
+3. 可配合 cron 定时巡检 `list-ddls --json` 并推送提醒
 
 ### 4. 期末复习包
 
-1. `batch-download` 下载所有课件
-2. `batch-extract` 批量转为 Markdown
-3. 导入 NotebookLM 复习
-
-## Configuration
-
-The skill uses a `.env` file or environment variables:
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `TOKEN` | Yes* | - | Canvas API token |
-| `BASE_URL` | No | `https://oc.sjtu.edu.cn` | Canvas instance URL |
-
-\* Only required for Canvas API commands. File extraction commands (`extract-file`, `batch-extract`) work without a token.
-
-Configuration schema is defined in `config.json`. See `config.example.json` for a sample.
-
-## Project Structure
-
-```
-sjtu-canvas-skill-fancy/
-├── scripts/              # Python CLI scripts
-│   ├── main.py          # Entry point
-│   ├── client.py        # Canvas API client
-│   ├── file_extractor.py # PPT/PDF/DOCX → Markdown extractor
-│   ├── calendar_sync.py  # DDL → Apple Calendar sync (macOS)
-│   └── __init__.py
-├── references/          # Documentation references
-│   └── troubleshooting.md
-├── SKILL.md             # Skill definition for Hermes Agent
-├── config.json          # Configuration JSON Schema
-├── config.example.json  # Configuration template
-├── pyproject.toml       # Python project configuration
-├── .gitignore
-└── README.md
-```
-
-## Key Features
-
-- **Current semester detection**: Automatically identifies the current academic term based on date
-- **Assignment filtering**: Shows only non-expired assignments with completion status
-- **Robust date parsing**: Handles both ISO and transformed date formats from Canvas API
-- **Comprehensive course scanning**: Includes assignments not visible on course homepage
-- **JSON output**: Machine-readable output for agent integration
-- **File extraction**: PPT/PDF/DOCX → Markdown conversion for AI study
-- **Calendar sync**: DDL → Apple Calendar (macOS + iPhone via iCloud)
-- **Grade tracking**: View grades and calculate weighted averages
-- **Discussion browsing**: Read course discussion forums
-- **Batch operations**: Bulk download and extract course materials
-
-## Development
-
 ```bash
-# Install dependencies
-uv sync
+# ① 批量下载所有课件
+uv run main batch-download 12345 --path ~/Downloads/复习包
 
-# Run with development dependencies
-uv sync --dev
+# ② 批量转为 Markdown
+uv run main batch-extract ~/Downloads/复习包 -o ~/Downloads/复习包_md
 
-# Format code
-uv run ruff format
-uv run ruff check --fix
-
-# Type check
-uv run mypy scripts/
+# ③ 导入 NotebookLM 或其他 RAG 工具
 ```
 
-## Troubleshooting
+---
 
-See [references/troubleshooting.md](references/troubleshooting.md) for:
-- SSL connectivity issues in WSL
-- Token management
-- Current term detection details
+## 常见问题
 
-## License
+详见 [`references/troubleshooting.md`](references/troubleshooting.md)，摘要如下：
 
-MIT License - Same as the original Hermes Agent project.
+| 问题 | 解决方案 |
+|---|---|
+| WSL 下 `SSL_ERROR_SYSCALL` 连接失败 | 更新 CA 证书、调整 WSL2 MTU，或在 Windows 宿主机运行 |
+| Token 时而有效时而失败 | Token 本身有效，是网络 / SSL 层问题，非鉴权问题 |
+| 学期识别不正确 | 用 `--term "2025-2026 Spring"` 手动指定 |
+| 提取课件报"需要安装 xxx" | 安装可选依赖：`uv pip install python-pptx pdfplumber python-docx` |
 
-## Credits
+**学期自动识别规则**：
 
-Based on the [SJTU Canvas Skill](https://github.com/nousresearch/hermes-agent/tree/main/skills/sjtu-canvas-skill) from the Hermes Agent project by Nous Research. Enhanced with AI study features inspired by [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas).
+- 1–2 月 → 上一学年 Fall（如 `2025-2026 Fall`）
+- 3–7 月 → 上一学年 Spring（如 `2025-2026 Spring`）
+- 8–12 月 → 本学年 Fall（如 `2026-2027 Fall`）
+
+---
+
+## 致谢与许可
+
+- 基于 [Hermes Agent 的 sjtu-canvas-skill](https://github.com/nousresearch/hermes-agent)（Nous Research）
+- AI 学习特性借鉴 [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas)
+
+本项目采用 [MIT 许可证](LICENSE)。
